@@ -17,11 +17,27 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Build release APK
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/wrapper
+            ~/.gradle/caches
+          key: gradle-${{ hashFiles('launcher/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: gradle-
+
+      - name: Build release APK (retries on network errors)
         working-directory: launcher
         run: |
           chmod +x gradlew
-          ./gradlew assembleRelease --console=plain
+          for i in 1 2 3 4 5 6; do
+            echo "Attempt $i"
+            if ./gradlew assembleRelease --console=plain; then
+              exit 0
+            fi
+            echo "Failed, waiting 45s before retry"
+            sleep 45
+          done
+          exit 1
 
       - name: Publish APK as a release
         env:
@@ -29,5 +45,5 @@ jobs:
         run: |
           gh release create "build-${{ github.run_id }}" \
             launcher/app/build/outputs/apk/release/app-release.apk \
-            --title "Build ${{ github.run_number }}" \
+            --title "Build ${{ github.run_id }}" \
             --notes "Glass TV launcher APK"
