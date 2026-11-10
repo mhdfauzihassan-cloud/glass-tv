@@ -16,18 +16,21 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
+
       - uses: gradle/actions/setup-gradle@v4
 
-      - name: Build release APK (retries on network errors)
+      - name: Build release APK
         working-directory: launcher
         run: |
           chmod +x gradlew
-          for i in 1 2 3 4 5 6; do
+          for i in 1 2 3; do
             echo "Attempt $i"
-            if ./gradlew assembleRelease --console=plain; then
-              exit 0
+            ./gradlew assembleRelease --console=plain 2>&1 | tee build.log
+            if [ "${PIPESTATUS[0]}" -eq 0 ]; then exit 0; fi
+            if grep -qE "error:|Compilation failed|Lint found" build.log; then
+              grep -E "error:|Lint found|Explanation" build.log | head -8 | while IFS= read -r line; do echo "::error::$line"; done
+              exit 1
             fi
-            echo "Failed, waiting 45s before retry"
             sleep 45
           done
           exit 1
